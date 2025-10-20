@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+- Grizzle-Kit enhances work with huandu/go-sqlbuilder by adding type safety features. Its primary goal is to eliminate string-based column and table references through auto-generated typed variable names.
+- This library includes a flavor mechanism to support different databases, ensuring your code remains compatible across various database systems.
+- Grizzle-Kit draws inspiration from Drizzle-Kit in Node.js, so you should follow its guidelines and naming conventions as closely as possible.
+- Do not write tests or README files until explicitly instructed to do so.
