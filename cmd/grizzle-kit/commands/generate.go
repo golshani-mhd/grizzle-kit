@@ -121,20 +121,22 @@ func runGenerateFromConfig() error {
 }
 
 func processFile(filePath, outputDir string) error {
-	fmt.Printf("Processing file: %s\n", filePath)
-
 	// Generate from file using public generator
-	if err := generator.GenerateFromFile(filePath, outputDir); err != nil {
+	entities, err := generator.GenerateFromFile(filePath, outputDir)
+	if err != nil {
 		return fmt.Errorf("failed to generate from file %s: %w", filePath, err)
 	}
 
-	fmt.Printf("Successfully generated code in %s\n", outputDir)
+	// Only log if entities were generated
+	if len(entities) > 0 {
+		for _, entityName := range entities {
+			fmt.Printf("Generated entity: %s\n", entityName)
+		}
+	}
 	return nil
 }
 
 func processDirectory(dirPath, outputDir string, recursive bool) error {
-	fmt.Printf("Processing directory: %s (recursive: %v)\n", dirPath, recursive)
-
 	var files []string
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -160,14 +162,24 @@ func processDirectory(dirPath, outputDir string, recursive bool) error {
 	}
 
 	// Process each file using public generator
+	totalGenerated := 0
 	for _, file := range files {
-		fmt.Printf("Processing file: %s\n", file)
-		if err := generator.GenerateFromFile(file, outputDir); err != nil {
+		entities, err := generator.GenerateFromFile(file, outputDir)
+		if err != nil {
 			fmt.Printf("Warning: failed to process file %s: %v\n", file, err)
 			continue
 		}
+		// Only log if entities were generated
+		if len(entities) > 0 {
+			for _, entityName := range entities {
+				fmt.Printf("Generated entity: %s\n", entityName)
+				totalGenerated++
+			}
+		}
 	}
 
-	fmt.Printf("Successfully generated code in %s\n", outputDir)
+	if totalGenerated > 0 {
+		fmt.Printf("\nSuccessfully generated %d entity(ies) in %s\n", totalGenerated, outputDir)
+	}
 	return nil
 }

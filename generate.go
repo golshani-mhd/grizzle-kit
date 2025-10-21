@@ -16,7 +16,8 @@ func GenerateEntities(tables map[string]*types.Table, outputDir string) error {
 }
 
 // GenerateFromFile generates entities from a Go file containing schema definitions
-func GenerateFromFile(inputFile, outputDir string) error {
+// Returns the list of generated entity names
+func GenerateFromFile(inputFile, outputDir string) ([]string, error) {
 	return generator.GenerateFromFile(inputFile, outputDir)
 }
 

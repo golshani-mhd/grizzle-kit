@@ -93,7 +93,8 @@ func getGoTypeFromColumnType(columnType types.ColumnType) string {
 }
 
 // GenerateFromFile is a convenience function that can be called from go:generate
-func GenerateFromFile(inputFile, outputDir string) error {
+// Returns the list of generated entity names
+func GenerateFromFile(inputFile, outputDir string) ([]string, error) {
 	config := &GeneratorConfig{OutputDir: outputDir}
 	gen := NewGenerator(config)
 	return gen.GenerateFromFile(inputFile)

@@ -17,23 +17,35 @@ import (
 func NewGenerator(config *GeneratorConfig) *Generator { return &Generator{config: config} }
 
 // GenerateFromFile parses a Go file and generates entity files
-func (g *Generator) GenerateFromFile(filePath string) error {
+// Returns the list of generated entity names
+func (g *Generator) GenerateFromFile(filePath string) ([]string, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return fmt.Errorf("failed to parse file %s: %w", filePath, err)
+		return nil, fmt.Errorf("failed to parse file %s: %w", filePath, err)
 	}
 	entities := g.extractEntities(node)
+
+	// If no entities found, return empty list
+	if len(entities) == 0 {
+		return []string{}, nil
+	}
+
+	var generatedEntities []string
 	for _, entity := range entities {
 		if err := g.generateEntityFile(entity); err != nil {
-			return fmt.Errorf("failed to generate entity %s: %w", entity.Name, err)
+			return nil, fmt.Errorf("failed to generate entity %s: %w", entity.Name, err)
 		}
+		generatedEntities = append(generatedEntities, entity.Name)
 	}
-	return nil
+	return generatedEntities, nil
 }
 
 // extractEntities extracts entity definitions from AST
 func (g *Generator) extractEntities(node *ast.File) []EntityInfo {
+	// First, find the alias for the grizzle-kit/types package
+	typesPkgAlias := g.findTypesPkgAlias(node)
+
 	var entities []EntityInfo
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch x := n.(type) {
@@ -42,18 +54,15 @@ func (g *Generator) extractEntities(node *ast.File) []EntityInfo {
 				for _, spec := range x.Specs {
 					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 						for i, name := range valueSpec.Names {
-							var entityName string
-							if strings.HasSuffix(name.Name, "Schema") {
-								entityName = strings.TrimSuffix(name.Name, "Schema")
-							} else if strings.HasSuffix(name.Name, "Definition") {
-								entityName = strings.TrimSuffix(name.Name, "Definition")
-							} else {
-								continue
-							}
+							// Check if this is a grizzle.Table composite literal
 							if len(valueSpec.Values) > i {
 								if compositeLit, ok := valueSpec.Values[i].(*ast.CompositeLit); ok {
-									if entity := g.parseTableDefinition(entityName, compositeLit); entity != nil {
-										entities = append(entities, *entity)
+									// Check if the type is grizzle.Table
+									if g.isTableType(compositeLit.Type, typesPkgAlias) {
+										entityName := g.deriveEntityName(name.Name)
+										if entity := g.parseTableDefinition(entityName, compositeLit); entity != nil {
+											entities = append(entities, *entity)
+										}
 									}
 								}
 							}
@@ -67,10 +76,63 @@ func (g *Generator) extractEntities(node *ast.File) []EntityInfo {
 	return entities
 }
 
+// findTypesPkgAlias finds the import alias for github.com/golshani-mhd/grizzle-kit/types
+func (g *Generator) findTypesPkgAlias(node *ast.File) string {
+	for _, imp := range node.Imports {
+		if imp.Path.Value == `"github.com/golshani-mhd/grizzle-kit/types"` {
+			if imp.Name != nil {
+				return imp.Name.Name
+			}
+			// If no alias, return the default package name
+			return "types"
+		}
+	}
+	return ""
+}
+
+// isTableType checks if the type expression is grizzle.Table (or alias.Table)
+func (g *Generator) isTableType(typeExpr ast.Expr, alias string) bool {
+	if alias == "" {
+		return false
+	}
+
+	if selector, ok := typeExpr.(*ast.SelectorExpr); ok {
+		if ident, ok := selector.X.(*ast.Ident); ok {
+			return ident.Name == alias && selector.Sel.Name == "Table"
+		}
+	}
+	return false
+}
+
+// deriveEntityName derives the entity name from the variable name
+func (g *Generator) deriveEntityName(varName string) string {
+	// Remove common suffixes
+	if strings.HasSuffix(varName, "Schema") {
+		return strings.TrimSuffix(varName, "Schema")
+	}
+	if strings.HasSuffix(varName, "Definition") {
+		return strings.TrimSuffix(varName, "Definition")
+	}
+	if strings.HasSuffix(varName, "Table") {
+		return strings.TrimSuffix(varName, "Table")
+	}
+	// Otherwise, use the variable name as-is
+	return varName
+}
+
 // parseTableDefinition parses a Table composite literal
 func (g *Generator) parseTableDefinition(entityName string, lit *ast.CompositeLit) *EntityInfo {
 	var tableName string
 	var columns []ColumnInfo
+
+	// Extract the package alias from the type
+	var pkgAlias string
+	if selector, ok := lit.Type.(*ast.SelectorExpr); ok {
+		if ident, ok := selector.X.(*ast.Ident); ok {
+			pkgAlias = ident.Name
+		}
+	}
+
 	for _, elt := range lit.Elts {
 		if kv, ok := elt.(*ast.KeyValueExpr); ok {
 			switch key := kv.Key.(*ast.Ident).Name; key {
@@ -80,7 +142,7 @@ func (g *Generator) parseTableDefinition(entityName string, lit *ast.CompositeLi
 				}
 			case "Columns":
 				if arrayLit, ok := kv.Value.(*ast.CompositeLit); ok {
-					columns = g.parseColumns(arrayLit)
+					columns = g.parseColumns(arrayLit, pkgAlias)
 				}
 			}
 		}
@@ -92,11 +154,11 @@ func (g *Generator) parseTableDefinition(entityName string, lit *ast.CompositeLi
 }
 
 // parseColumns parses column definitions from array literal
-func (g *Generator) parseColumns(arrayLit *ast.CompositeLit) []ColumnInfo {
+func (g *Generator) parseColumns(arrayLit *ast.CompositeLit, pkgAlias string) []ColumnInfo {
 	var columns []ColumnInfo
 	for _, elt := range arrayLit.Elts {
 		if call, ok := elt.(*ast.CallExpr); ok {
-			if column := g.parseColumnCall(call); column != nil {
+			if column := g.parseColumnCall(call, pkgAlias); column != nil {
 				columns = append(columns, *column)
 			}
 		}
@@ -105,7 +167,7 @@ func (g *Generator) parseColumns(arrayLit *ast.CompositeLit) []ColumnInfo {
 }
 
 // parseColumnCall parses a column function call (e.g., Int, Varchar, etc.)
-func (g *Generator) parseColumnCall(call *ast.CallExpr) *ColumnInfo {
+func (g *Generator) parseColumnCall(call *ast.CallExpr, pkgAlias string) *ColumnInfo {
 	var columnName, goType, sqlType, abstractType string
 	var autoIncrement, hasDefault bool
 	var defaultValue interface{}
@@ -115,7 +177,7 @@ func (g *Generator) parseColumnCall(call *ast.CallExpr) *ColumnInfo {
 		funcName := ident.Name
 		goType, sqlType, abstractType = g.getTypeInfo(funcName)
 	} else if selector, ok := call.Fun.(*ast.SelectorExpr); ok {
-		if ident, ok := selector.X.(*ast.Ident); ok && ident.Name == "grizzle" {
+		if ident, ok := selector.X.(*ast.Ident); ok && ident.Name == pkgAlias {
 			funcName := selector.Sel.Name
 			goType, sqlType, abstractType = g.getTypeInfo(funcName)
 		}
@@ -136,12 +198,12 @@ func (g *Generator) parseColumnCall(call *ast.CallExpr) *ColumnInfo {
 				if ident, ok := indexExpr.X.(*ast.Ident); ok {
 					funcName = ident.Name
 				} else if selector, ok := indexExpr.X.(*ast.SelectorExpr); ok {
-					if ident, ok := selector.X.(*ast.Ident); ok && ident.Name == "grizzle" {
+					if ident, ok := selector.X.(*ast.Ident); ok && ident.Name == pkgAlias {
 						funcName = selector.Sel.Name
 					}
 				}
 			} else if selector, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-				if ident, ok := selector.X.(*ast.Ident); ok && ident.Name == "grizzle" {
+				if ident, ok := selector.X.(*ast.Ident); ok && ident.Name == pkgAlias {
 					funcName = selector.Sel.Name
 				}
 			}
@@ -155,7 +217,7 @@ func (g *Generator) parseColumnCall(call *ast.CallExpr) *ColumnInfo {
 			case "WithType":
 				if len(callExpr.Args) > 0 {
 					if selector, ok := callExpr.Args[0].(*ast.SelectorExpr); ok {
-						if ident, ok := selector.X.(*ast.Ident); ok && ident.Name == "grizzle" {
+						if ident, ok := selector.X.(*ast.Ident); ok && ident.Name == pkgAlias {
 							sqlType = selector.Sel.Name
 						}
 					}
