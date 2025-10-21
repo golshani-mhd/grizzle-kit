@@ -109,18 +109,18 @@ func createConfigFile() error {
 # This file defines how Grizzle should generate your type-safe database code
 
 generate:
-  input: "./schema"  # Input directory containing schema files
-  output: "./gen"    # Output directory for generated code
-  recursive: true    # Process subdirectories recursively
+  input: "./schema"             # Input directory containing schema files
+  output: "gen/grizzle/schema"  # Output directory for generated code
+  recursive: true               # Process subdirectories recursively
 
 # Optional: Define specific entities to generate
 # entities:
 #   - name: "User"
 #     input: "./schema/user_schema.go"
-#     output: "./gen/user"
+#     output: "gen/grizzle/schema/user"
 #   - name: "Product" 
 #     input: "./schema/product_schema.go"
-#     output: "./gen/product"
+#     output: "gen/grizzle/schema/product"
 
 # Optional: Global settings
 # settings:
@@ -150,7 +150,7 @@ package main
 
 import (
     "fmt"
-    "your-project/gen/user"
+    "your-project/gen/grizzle/schema/user"
     "github.com/golshani-mhd/grizzle"
 )
 

@@ -21,9 +21,9 @@ This command can work in two modes:
 2. Config mode: Use a configuration file to specify multiple inputs and outputs
 
 Examples:
-  grizzle generate --input ./internal/domain/user/user_schema.go --output ./gen
+  grizzle generate --input ./internal/domain/user/user_schema.go --output gen/grizzle/schema
   grizzle generate --config grizzle.yaml
-  grizzle generate --input ./schema --output ./gen --recursive`,
+  grizzle generate --input ./schema --output gen/grizzle/schema --recursive`,
 	RunE: runGenerate,
 }
 
@@ -40,7 +40,7 @@ func init() {
 
 	// Flags for direct mode
 	generateCmd.Flags().StringVarP(&inputFile, "input", "i", "", "Input Go file or directory containing schema definitions")
-	generateCmd.Flags().StringVarP(&outputDir, "output", "o", "./gen", "Output directory for generated files")
+	generateCmd.Flags().StringVarP(&outputDir, "output", "o", "gen/grizzle/schema", "Output directory for generated files")
 	generateCmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Process directories recursively")
 	generateCmd.Flags().StringVar(&entityName, "entity", "", "Entity name (if not specified, will be inferred from schema)")
 	generateCmd.Flags().StringVar(&packageName, "package", "", "Package name for generated code (if not specified, will be inferred)")
@@ -98,7 +98,7 @@ func runGenerateFromConfig() error {
 		return fmt.Errorf("input not specified in config")
 	}
 	if output == "" {
-		output = "./gen"
+		output = "gen/grizzle/schema"
 	}
 
 	// Create output directory

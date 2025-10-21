@@ -44,7 +44,7 @@ var UserSchema = types.Table{
 ### 2. Generate Type-Safe Code
 
 ```bash
-grizzle-kit generate --input ./schema --output ./gen
+grizzle-kit generate --input ./schema --output gen/grizzle/schema
 ```
 
 ### 3. Use Generated Code
@@ -54,7 +54,7 @@ package main
 
 import (
     "github.com/huandu/go-sqlbuilder"
-    "your-project/gen/user"
+    "your-project/gen/grizzle/schema/user"
 )
 
 func main() {
@@ -87,8 +87,8 @@ Generate type-safe code from schema definitions:
 
 ```bash
 # Using command-line flags
-grizzle-kit generate --input ./schema --output ./gen
-grizzle-kit generate --input ./schema --output ./gen --recursive
+grizzle-kit generate --input ./schema --output gen/grizzle/schema
+grizzle-kit generate --input ./schema --output gen/grizzle/schema --recursive
 
 # Using configuration file
 grizzle-kit generate  # reads from grizzle.yaml
@@ -100,9 +100,9 @@ Create a `grizzle.yaml` file in your project root:
 
 ```yaml
 generate:
-  input: "./schema"   # Input directory with schema files
-  output: "./gen"     # Output directory for generated code
-  recursive: true     # Process subdirectories recursively
+  input: "./schema"             # Input directory with schema files
+  output: "gen/grizzle/schema"  # Output directory for generated code
+  recursive: true               # Process subdirectories recursively
 ```
 
 ## Column Types
@@ -175,13 +175,15 @@ const (
 
 ```
 your-project/
-├── schema/           # Your schema definitions
+├── schema/              # Your schema definitions
 │   └── user_schema.go
-├── gen/              # Generated type-safe code
-│   └── user/
-│       └── user.go
-├── grizzle.yaml      # Configuration file
-└── main.go           # Your application
+├── gen/
+│   └── grizzle/
+│       └── schema/      # Generated type-safe code
+│           └── user/
+│               └── user.go
+├── grizzle.yaml         # Configuration file
+└── main.go              # Your application
 ```
 
 ## Integration with go-sqlbuilder
@@ -191,8 +193,8 @@ Grizzle-Kit generates constants that work seamlessly with `go-sqlbuilder`:
 ```go
 import (
     "github.com/huandu/go-sqlbuilder"
-    "your-project/gen/user"
-    "your-project/gen/product"
+    "your-project/gen/grizzle/schema/user"
+    "your-project/gen/grizzle/schema/product"
 )
 
 // Select with joins
