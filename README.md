@@ -47,6 +47,10 @@ var UserSchema = types.Table{
 grizzle-kit generate --input ./schema --output gen/grizzle/schema
 ```
 
+This generates:
+- **Schema files** in `gen/grizzle/schema/{entity}/` - Type-safe column references
+- **Model files** in `gen/grizzle/model/` - Go structs for database rows
+
 ### 3. Use Generated Code
 
 ```go
@@ -55,18 +59,22 @@ package main
 import (
     "github.com/huandu/go-sqlbuilder"
     "your-project/gen/grizzle/schema/user"
+    "your-project/gen/grizzle/model"
 )
 
 func main() {
     sb := sqlbuilder.NewSelectBuilder()
     
     // Type-safe column references - no more string literals!
-    sb.Select(user.Id, user.Email, user.Name)
-    sb.From(user.TableName)
+    sb.Select(user.Id, user.Email, user.Name, user.CreatedAt)
+    sb.From(user.TABLE_NAME)
     sb.Where(sb.Equal(user.Email, "john@example.com"))
     
     sql, args := sb.Build()
-    // Execute your query...
+    
+    // Scan results into generated model
+    var users []model.User
+    // db.Select(&users, sql, args...)
 }
 ```
 
@@ -154,22 +162,52 @@ import "github.com/golshani-mhd/grizzle-kit/flavors"
 sql := UserSchema.BuildCreate(flavors.PostgreSQL)
 ```
 
-## Generated Code Example
+## Generated Code
 
-From the schema above, Grizzle-Kit generates:
+From the schema above, Grizzle-Kit generates two types of files:
+
+### Schema File (`gen/grizzle/schema/user/user.go`)
+
+Type-safe column references and query builders:
 
 ```go
 package user
 
-// Type-safe column names
-const (
-    Id        = "id"
-    Email     = "email"
-    Name      = "name"
-    CreatedAt = "created_at"
-    TableName = "users"
-)
+import types "github.com/golshani-mhd/grizzle-kit/types"
+
+const TABLE_NAME = "users"
+
+var Schema = struct {
+    Id        *types.Column[int32]
+    Email     *types.Column[string]
+    Name      *types.Column[string]
+    CreatedAt *types.Column[time.Time]
+}{...}
+
+var Id = Schema.Id.String()
+var Email = Schema.Email.String()
+var Name = Schema.Name.String()
+var CreatedAt = Schema.CreatedAt.String()
 ```
+
+### Model File (`gen/grizzle/model/user.go`)
+
+Go struct for database rows:
+
+```go
+package model
+
+import "time"
+
+type User struct {
+    Id        int32     `db:"id"`
+    Email     string    `db:"email"`
+    Name      string    `db:"name"`
+    CreatedAt time.Time `db:"created_at"`
+}
+```
+
+The model structs can be used with database scanning libraries like `sqlx`:
 
 ## Project Structure
 
@@ -179,7 +217,9 @@ your-project/
 │   └── user_schema.go
 ├── gen/
 │   └── grizzle/
-│       └── schema/      # Generated type-safe code
+│       ├── model/       # Generated model structs
+│       │   └── user.go
+│       └── schema/      # Generated type-safe column references
 │           └── user/
 │               └── user.go
 ├── grizzle.yaml         # Configuration file
